@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cadastro de Aluno - Reconhecimento Facial</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; }
+    h1 { text-align: center; color: #333; }
+    label { display: block; margin: 15px 0 5px; font-weight: bold; }
+    input, select { width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+    button { width: 100%; padding: 12px; background: #3b82f6; color: white; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; }
+    button:hover { background: #2563eb; }
+    .sucesso { color: green; font-weight: bold; text-align: center; }
+  </style>
+</head>
+<body>
+  <h1>📸 Cadastro de Aluno</h1>
+  
+  <form id="form-cadastro">
+    <label>Nome completo do aluno:</label>
+    <input type="text" id="nome" placeholder="Ex: João Silva" required>
+
+    <label>CGM:</label>
+    <input type="text" id="cgm" placeholder="Ex: 12345678" required>
+
+    <label>Turma (ex: 3A, 7B):</label>
+    <input type="text" id="turma" placeholder="Ex: 3A" required>
+
+    <label>Turno:</label>
+    <select id="turno" required>
+      <option value="">Selecione o turno</option>
+      <option value="Manhã">Manhã</option>
+      <option value="Tarde">Tarde</option>
+      <option value="Noite">Noite</option>
+    </select>
+
+    <label>Foto do aluno (rosto bem visível):</label>
+    <input type="file" id="foto" accept="image/*" required>
+
+    <button type="button" onclick="cadastrar()">Cadastrar Aluno</button>
+  </form>
+
+  <p id="mensagem" class="sucesso"></p>
+
+  <script>
+    // ==================== CONFIGURAÇÃO SUPABASE ====================
+    const supabaseUrl = 'https://aslcwuwijpehvhtkrahp.supabase.co';
+    const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFzbGN3dXdpanBlaHZodGtyYWhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwODI3NDQsImV4cCI6MjA5MTY1ODc0NH0.F8ac-a66w6TyNPtqR7jGaIYww-tQrJnkO44bxJOKDlw';
+
+    const supabase = Supabase.createClient(supabaseUrl, supabaseAnonKey);
+
+    const BUCKET_NAME = 'fotos-alunos';
+
+    async function cadastrar() {
+      const nome = document.getElementById('nome').value.trim();
+      const cgm = document.getElementById('cgm').value.trim();
+      const turma = document.getElementById('turma').value.trim().toUpperCase();
+      const turno = document.getElementById('turno').value;
+      const arquivoFoto = document.getElementById('foto').files[0];
+
+      const mensagem = document.getElementById('mensagem');
+
+      if (!nome || !cgm || !turma || !turno || !arquivoFoto) {
+        mensagem.style.color = 'red';
+        mensagem.textContent = '❌ Preencha todos os campos e escolha uma foto!';
+        return;
+      }
+
+      mensagem.textContent = 'Enviando foto e cadastrando...';
+
+      try {
+        // 1. Upload da foto
+        const fileExt = arquivoFoto.name.split('.').pop().toLowerCase();
+        const fileName = `${cgm}.${fileExt}`;
+        const filePath = `alunos/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from(BUCKET_NAME)
+          .upload(filePath, arquivoFoto, { upsert: false });
+
+        if (uploadError) {
+          throw new Error('Erro ao subir foto: ' + uploadError.message);
+        }
+
+        // 2. Salvar dados no banco
+        const { error: insertError } = await supabase
+          .from('alunos')
+          .insert({
+            nome_aluno: nome,
+            cgm: cgm,
+            turma: turma,
+            turno: turno,
+            foto_path: filePath
+          });
+
+        if (insertError) {
+          throw new Error('Erro ao salvar aluno: ' + insertError.message);
+        }
+
+        mensagem.style.color = 'green';
+        mensagem.textContent = `✅ Aluno ${nome} cadastrado com sucesso!`;
+
+        // Limpa o formulário
+        document.getElementById('form-cadastro').reset();
+
+      } catch (error) {
+        console.error(error);
+        mensagem.style.color = 'red';
+        mensagem.textContent = '❌ ' + error.message;
+      }
+    }
+  </script>
+
+  <!-- Supabase Client CDN (para não precisar instalar nada) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</body>
+</html>
